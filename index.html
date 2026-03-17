@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>🐺 Wolf-Man</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Arial Black', sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+    h1 {
+      font-size: 28px;
+      color: #f90;
+      letter-spacing: 4px;
+      text-shadow: 0 0 10px #f90;
+      margin-bottom: 8px;
+    }
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      width: 560px;
+      padding: 6px 4px;
+      font-size: 16px;
+    }
+    #hud span { color: #f90; }
+    canvas { display: block; }
+    #msg {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+
+<div id="hud">
+  <div>SCORE: <span id="score">0</span></div>
+  <div>LIVES: <span id="lives">❤️❤️❤️</span></div>
+</div>
+<canvas id="c"></canvas>
+<div id="msg">방향키로 이동 | R 키로 재시작</div>
+
+<script>
+const C = document.getElementById('c');
+const ctx = C.getContext('2d');
+
+const CELL = 20;
+const COLS = 28;
+const ROWS = 31;
+C.width  = COLS * CELL;
+C.height = ROWS * CELL;
+
+// 0=empty, 1=wall, 2=dot, 3=power, 4=blank
+const MAP_TEMPLATE = [
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+  [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+  [1,3,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,3,1],
+  [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+  [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+  [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+  [1,2,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,2,1],
+  [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+  [1,1,1,1,1,1,2,1,1,1,1,1,4,1,1,4,1,1,1,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,1,1,1,4,1,1,4,1,1,1,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,4,4,4,4,4,4,4,4,4,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,1,1,1,4,4,1,1,1,4,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,1,4,4,4,4,4,4,1,4,1,1,2,1,1,1,1,1,1],
+  [4,4,4,4,4,4,2,4,4,4,1,4,4,4,4,4,4,1,4,4,4,2,4,4,4,4,4,4],
+  [1,1,1,1,1,1,2,1,1,4,1,4,4,4,4,4,4,1,4,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,4,4,4,4,4,4,4,4,4,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+  [1,1,1,1,1,1,2,1,1,4,1,1,1,1,1,1,1,1,4,1,1,2,1,1,1,1,1,1],
+  [1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,2,2,2,2,2,2,2,2,2,2,2,2,1],
+  [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+  [1,2,1,1,1,1,2,1,1,1,1,1,2,1,1,2,1,1,1,1,1,2,1,1,1,1,2,1],
+  [1,3,2,2,1,1,2,2,2,2,2,2,2,4,4,2,2,2,2,2,2,2,1,1,2,2,3,1],
+  [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+  [1,1,1,2,1,1,2,1,1,2,1,1,1,1,1,1,1,1,2,1,1,2,1,1,2,1,1,1],
+  [1,2,2,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,1,1,2,2,2,2,2,2,1],
+  [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+  [1,2,1,1,1,1,1,1,1,1,1,1,2,1,1,2,1,1,1,1,1,1,1,1,1,1,2,1],
+  [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+let map, score, lives, dotsLeft, gameState, powerTimer, powerMode;
+let wolf, ghosts;
+
+const GHOST_COLORS = [
+  '#FF4444','#FFB8FF','#44FFFF','#FFB852',
+  '#FF8800','#00FF88','#FF44FF','#AAAAFF',
+];
+
+// 유령 시작 위치 상수 (n.5*CELL = 셀 정중앙, 각각 고유 위치)
+const GHOST_START = [
+  { cx: 13.5*CELL, cy: 11.5*CELL, dx:  2, dy:  0 },
+  { cx: 13.5*CELL, cy: 14.5*CELL, dx: -2, dy:  0 },
+  { cx: 11.5*CELL, cy: 14.5*CELL, dx:  0, dy:  2 },
+  { cx: 15.5*CELL, cy: 14.5*CELL, dx:  0, dy: -2 },
+  { cx:  9.5*CELL, cy: 11.5*CELL, dx:  2, dy:  0 },
+  { cx: 17.5*CELL, cy: 11.5*CELL, dx: -2, dy:  0 },
+  { cx:  9.5*CELL, cy: 13.5*CELL, dx:  0, dy:  2 },
+  { cx: 16.5*CELL, cy: 13.5*CELL, dx:  0, dy: -2 },
+];
+
+function initGame() {
+  map = MAP_TEMPLATE.map(r => [...r]);
+  score = 0;
+  lives = 3;
+  dotsLeft = 0;
+  gameState = 'ready'; // ready, playing, dying, gameover, win
+  powerTimer = 0;
+  powerMode = false;
+  readyTimer = 90;
+  deathTimer = 0;
+
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (map[r][c] === 2 || map[r][c] === 3) dotsLeft++;
+
+  wolf = {
+    cx: 14 * CELL, cy: 23.5 * CELL,
+    dx: 0, dy: 0,
+    wantDx: 0, wantDy: 0,
+    mouth: 0.05, mouthDir: 1,
+    angle: 0,
+    dead: false,
+  };
+
+  ghosts = GHOST_START.map((s, i) => ({
+    cx: s.cx, cy: s.cy, dx: s.dx, dy: s.dy,
+    color: GHOST_COLORS[i], scared: false, eaten: false,
+  }));
+
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('score').textContent = score;
+  document.getElementById('lives').textContent = '❤️'.repeat(Math.max(0, lives));
+}
+
+// ── Collision helpers ────────────────────────────────────────────────────────
+function cell(px, py) {
+  const c = Math.floor(px / CELL);
+  const r = Math.floor(py / CELL);
+  if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return 1;
+  return map[r][c];
+}
+
+function isWall(px, py) { return cell(px, py) === 1; }
+
+// Can an entity of half-size `hs` move in direction (dx,dy)?
+function canStep(cx, cy, dx, dy, hs = CELL * 0.45) {
+  const nx = cx + dx, ny = cy + dy;
+  return !isWall(nx - hs, ny - hs)
+      && !isWall(nx + hs, ny - hs)
+      && !isWall(nx - hs, ny + hs)
+      && !isWall(nx + hs, ny + hs);
+}
+
+// ── Wolf update ──────────────────────────────────────────────────────────────
+function updateWolf() {
+  const SPEED = 2;
+
+  // Try to turn
+  if (wolf.wantDx !== 0 || wolf.wantDy !== 0) {
+    if (canStep(wolf.cx, wolf.cy, wolf.wantDx * SPEED, wolf.wantDy * SPEED)) {
+      wolf.dx = wolf.wantDx * SPEED;
+      wolf.dy = wolf.wantDy * SPEED;
+    }
+  }
+
+  if (canStep(wolf.cx, wolf.cy, wolf.dx, wolf.dy)) {
+    wolf.cx += wolf.dx;
+    wolf.cy += wolf.dy;
+  }
+
+  // Tunnel wrap
+  if (wolf.cx < 0) wolf.cx = COLS * CELL - 1;
+  if (wolf.cx >= COLS * CELL) wolf.cx = 0;
+
+  // Facing angle
+  if      (wolf.dx > 0) wolf.angle = 0;
+  else if (wolf.dx < 0) wolf.angle = Math.PI;
+  else if (wolf.dy > 0) wolf.angle = Math.PI / 2;
+  else if (wolf.dy < 0) wolf.angle = -Math.PI / 2;
+
+  // Mouth
+  if (wolf.dx !== 0 || wolf.dy !== 0) {
+    wolf.mouth += 0.12 * wolf.mouthDir;
+    if (wolf.mouth > 0.38 || wolf.mouth < 0.03) wolf.mouthDir *= -1;
+  }
+
+  // Eat dot — use Math.floor: wolf.cy = 23.5*CELL → floor=23 (correct row)
+  const gc = Math.floor(wolf.cx / CELL);
+  const gr = Math.floor(wolf.cy / CELL);
+  if (gr >= 0 && gr < ROWS && gc >= 0 && gc < COLS) {
+    if (map[gr][gc] === 2) {
+      map[gr][gc] = 4; score += 10; dotsLeft--; updateHUD();
+    } else if (map[gr][gc] === 3) {
+      map[gr][gc] = 4; score += 50; dotsLeft--; updateHUD();
+      powerMode = true;
+      powerTimer = 350;
+      ghosts.forEach(g => { g.scared = true; g.eaten = false; });
+    }
+  }
+}
+
+// ── Ghost update ─────────────────────────────────────────────────────────────
+function updateGhost(g) {
+  const spd = g.scared ? 1 : 2;
+
+  // 허용 범위 < 1.5px: 중심에서 spd=2 이동하면 2px 벗어나 범위 탈출 → 스냅 루프 방지
+  const onGridX = Math.abs(g.cx % CELL - CELL / 2) < 1.5;
+  const onGridY = Math.abs(g.cy % CELL - CELL / 2) < 1.5;
+
+  if (onGridX && onGridY) {
+    g.cx = Math.floor(g.cx / CELL) * CELL + CELL / 2;
+    g.cy = Math.floor(g.cy / CELL) * CELL + CELL / 2;
+
+    const col = Math.floor(g.cx / CELL);
+    const row = Math.floor(g.cy / CELL);
+
+    const dirs = [
+      { dx:  spd, dy: 0 },
+      { dx: -spd, dy: 0 },
+      { dx: 0, dy:  spd },
+      { dx: 0, dy: -spd },
+    ];
+
+    const valid = dirs.filter(d => {
+      if (d.dx === -g.dx && d.dy === -g.dy) return false; // U턴 금지
+      const nc = col + Math.sign(d.dx);
+      const nr = row + Math.sign(d.dy);
+      if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
+      return map[nr][nc] !== 1; // 셀 기반 벽 확인
+    });
+
+    if (valid.length > 0) {
+      if (g.scared) {
+        // 파워 모드: 플레이어에게서 가장 먼 방향으로 도망
+        const wc = wolf.cx, wy = wolf.cy;
+        valid.sort((a, b) => {
+          const da = (g.cx + a.dx - wc) ** 2 + (g.cy + a.dy - wy) ** 2;
+          const db = (g.cx + b.dx - wc) ** 2 + (g.cy + b.dy - wy) ** 2;
+          return db - da; // 멀어지는 방향 우선
+        });
+        g.dx = valid[0].dx;
+        g.dy = valid[0].dy;
+      } else {
+        // 평소: 랜덤 이동
+        const pick = valid[Math.floor(Math.random() * valid.length)];
+        g.dx = pick.dx;
+        g.dy = pick.dy;
+      }
+    } else {
+      g.dx = -g.dx; g.dy = -g.dy;
+    }
+  }
+
+  // 이동은 무조건 실행 — 교차점에서 이미 유효 방향만 선택했으므로 canStep 불필요
+  g.cx += g.dx;
+  g.cy += g.dy;
+
+  if (g.cx < 0) g.cx = COLS * CELL - 1;
+  if (g.cx >= COLS * CELL) g.cx = 0;
+}
+
+function checkCollisions() {
+  for (const g of ghosts) {
+    const dist = Math.hypot(wolf.cx - g.cx, wolf.cy - g.cy);
+    if (dist < CELL - 2) {
+      if (g.scared && !g.eaten) {
+        g.eaten = true;
+        g.scared = false;
+        score += 200;
+        updateHUD();
+        // Return ghost to box
+        g.cx = 13.5 * CELL; g.cy = 14 * CELL;
+        g.dx = 2; g.dy = 0;
+      } else if (!g.scared && !g.eaten) {
+        gameState = 'dying';
+        return;
+      }
+    }
+  }
+}
+
+// ── Drawing ──────────────────────────────────────────────────────────────────
+function drawMaze() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const v = map[r][c];
+      const x = c * CELL, y = r * CELL;
+
+      if (v === 1) {
+        // Wall
+        ctx.fillStyle = '#1133cc';
+        ctx.fillRect(x, y, CELL, CELL);
+        ctx.fillStyle = '#2255ff';
+        ctx.fillRect(x + 2, y + 2, CELL - 4, CELL - 4);
+        ctx.fillStyle = '#1133cc';
+        ctx.fillRect(x + 4, y + 4, CELL - 8, CELL - 8);
+      } else if (v === 2) {
+        ctx.fillStyle = '#ffeebb';
+        ctx.beginPath();
+        ctx.arc(x + CELL/2, y + CELL/2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (v === 3) {
+        const p = (Math.sin(Date.now() / 180) + 1) / 2;
+        ctx.fillStyle = `rgba(255, 220, 60, ${0.6 + p * 0.4})`;
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 8 * p;
+        ctx.beginPath();
+        ctx.arc(x + CELL/2, y + CELL/2, 5 + p * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+  }
+}
+
+function drawWolf() {
+  const { cx, cy, angle, mouth } = wolf;
+  const R = CELL / 2 - 1;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  // Classic Pac-Man yellow body
+  ctx.fillStyle = '#FFE000';
+  ctx.beginPath();
+  ctx.arc(0, 0, R, mouth, Math.PI * 2 - mouth);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eye
+  ctx.fillStyle = '#111';
+  ctx.beginPath();
+  ctx.arc(2, -4, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawGhost(g) {
+  const { cx, cy, scared, eaten, color } = g;
+  if (eaten) return;
+
+  const R = CELL / 2 - 1;
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  const flash = powerTimer < 80 && Math.floor(Date.now() / 200) % 2;
+  const bodyColor = scared ? (flash ? '#ffffff' : '#2222ff') : color;
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(2, 3, R, R * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath();
+  ctx.arc(0, -2, R, Math.PI, 0);
+  ctx.lineTo(R, R - 1);
+  // Wavy bottom
+  const seg = R * 2 / 3;
+  ctx.quadraticCurveTo(R - seg * 0.5, R + 3, R - seg, R - 2);
+  ctx.quadraticCurveTo(R - seg * 1.5, R - 6, 0, R);
+  ctx.quadraticCurveTo(-seg * 0.5, R + 3, -seg, R - 2);
+  ctx.quadraticCurveTo(-R + seg * 0.5, R - 6, -R, R - 1);
+  ctx.lineTo(-R, R - 1);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eyes
+  if (!scared) {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(-3.5, -3, 3, 4, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( 3.5, -3, 3, 4, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#0044ff';
+    ctx.beginPath(); ctx.arc(-3.5, -3, 1.8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 3.5, -3, 1.8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(-2.5, -4, 0.7, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 4.5, -4, 0.7, 0, Math.PI*2); ctx.fill();
+  } else {
+    // Scared wobbly eyes
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(-3, -3, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 3, -3, 2, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-5, 2); ctx.lineTo(-3, 4); ctx.lineTo(-1, 2);
+    ctx.lineTo( 1, 4); ctx.lineTo( 3, 2); ctx.lineTo(5, 4);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawLives() {
+  // Already shown in HUD
+}
+
+function drawOverlay(title, sub, color = '#fff') {
+  ctx.fillStyle = 'rgba(0,0,0,0.65)';
+  ctx.fillRect(0, 0, C.width, C.height);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = color;
+  ctx.font = 'bold 40px Arial Black';
+  ctx.fillText(title, C.width / 2, C.height / 2 - 16);
+  ctx.fillStyle = '#ccc';
+  ctx.font = '18px Arial';
+  ctx.fillText(sub, C.width / 2, C.height / 2 + 20);
+}
+
+// ── Game loop ─────────────────────────────────────────────────────────────────
+let deathTimer = 0;
+let readyTimer = 90;
+
+function update() {
+  if (gameState === 'ready') {
+    return; // 방향키를 눌러야만 시작 (keydown 핸들러에서 전환)
+  }
+
+  if (gameState === 'dying') {
+    deathTimer++;
+    if (deathTimer > 90) {
+      deathTimer = 0;
+      lives--;
+      updateHUD();
+      if (lives <= 0) { gameState = 'gameover'; return; }
+      // Reset positions
+      wolf.cx = 14 * CELL; wolf.cy = 23.5 * CELL;
+      wolf.dx = 0; wolf.dy = 0; wolf.wantDx = 0; wolf.wantDy = 0;
+      powerMode = false; powerTimer = 0;
+      // GHOST_START로 리셋 → 셀 정중앙, 고유 위치
+      ghosts.forEach((g, i) => {
+        const s = GHOST_START[i];
+        g.cx = s.cx; g.cy = s.cy; g.dx = s.dx; g.dy = s.dy;
+        g.scared = false; g.eaten = false;
+      });
+      gameState = 'ready';
+    }
+    return;
+  }
+
+  if (gameState !== 'playing') return;
+
+  updateWolf();
+  ghosts.forEach(updateGhost);
+  checkCollisions();
+
+  if (powerMode) {
+    powerTimer--;
+    if (powerTimer <= 0) {
+      powerMode = false;
+      ghosts.forEach(g => { g.scared = false; });
+    }
+  }
+
+  if (dotsLeft <= 0) gameState = 'win';
+}
+
+function draw() {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, C.width, C.height);
+
+  drawMaze();
+
+  if (gameState !== 'gameover') {
+    if (gameState === 'dying') {
+      // Flash wolf red
+      const flash = Math.floor(deathTimer / 8) % 2;
+      if (!flash) drawWolf();
+    } else {
+      drawWolf();
+    }
+    ghosts.forEach(drawGhost);
+  }
+
+  if (gameState === 'ready') {
+    drawOverlay('READY!', '방향키로 시작!', '#f90');
+  } else if (gameState === 'dying' && deathTimer > 50) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,60,60,0.85)';
+    ctx.font = 'bold 30px Arial Black';
+    ctx.fillText('아얏! 🐺💥', C.width / 2, C.height / 2);
+  } else if (gameState === 'gameover') {
+    drawOverlay('GAME OVER', `점수: ${score}  |  R 키로 재시작`, '#ff4444');
+  } else if (gameState === 'win') {
+    drawOverlay('WIN! 🎉', `최종점수: ${score}  |  R 키로 재시작`, '#ffdd00');
+  }
+
+  if (powerMode && gameState === 'playing') {
+    const pct = powerTimer / 350;
+    ctx.fillStyle = `rgba(100,200,255,${0.15 * pct})`;
+    ctx.fillRect(0, 0, C.width, C.height);
+  }
+}
+
+let lastTime = 0;
+function loop(ts) {
+  if (ts - lastTime >= 16) {
+    update();
+    draw();
+    lastTime = ts;
+  }
+  requestAnimationFrame(loop);
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  switch (e.key) {
+    case 'ArrowLeft':  wolf.wantDx = -1; wolf.wantDy =  0; if (gameState === 'ready') gameState = 'playing'; e.preventDefault(); break;
+    case 'ArrowRight': wolf.wantDx =  1; wolf.wantDy =  0; if (gameState === 'ready') gameState = 'playing'; e.preventDefault(); break;
+    case 'ArrowUp':    wolf.wantDx =  0; wolf.wantDy = -1; if (gameState === 'ready') gameState = 'playing'; e.preventDefault(); break;
+    case 'ArrowDown':  wolf.wantDx =  0; wolf.wantDy =  1; if (gameState === 'ready') gameState = 'playing'; e.preventDefault(); break;
+    case 'r': case 'R':
+      initGame(); // initGame 내부에서 readyTimer/deathTimer 리셋
+      break;
+  }
+});
+
+// Touch / swipe support
+let touchStartX = 0, touchStartY = 0;
+C.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  e.preventDefault();
+}, { passive: false });
+C.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    wolf.wantDx = dx > 0 ? 1 : -1; wolf.wantDy = 0;
+  } else {
+    wolf.wantDx = 0; wolf.wantDy = dy > 0 ? 1 : -1;
+  }
+  e.preventDefault();
+}, { passive: false });
+
+initGame();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
